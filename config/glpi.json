@@ -1,0 +1,15 @@
+{
+  "server_url": "https://soporte.girag.com/plugins/glpiinventory",
+  "agent_paths": [
+    "%ProgramFiles%\\GLPI-Agent\\glpi-agent.bat",
+    "%ProgramFiles(x86)%\\GLPI-Agent\\glpi-agent.bat"
+  ],
+  "service_name": "glpi-agent",
+  "http_port": 62354,
+  "method": "auto",
+  "log_paths": [
+    "%ProgramFiles%\\GLPI-Agent\\logs\\glpi-agent.log"
+  ],
+  "timeout_minutes": 15,
+  "_nota": "method: 'auto' = pide al servicio del agente instalado que haga el inventario YA (equivale a «Forzar un inventario» de su página local) y, si no responde, ejecuta glpi-agent.bat --force; 'service' = solo servicio; 'cli' = solo línea de comandos."
+}

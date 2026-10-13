@@ -1,0 +1,4 @@
+{
+  "_nota": "Lista inicial de IDs de winget aprobados (ej. \"Google.Chrome\"). La app guarda aquí la lista que defina el técnico en %ProgramData%\\GiragMaintenance\\winget_approved.json, que tiene prioridad sobre este archivo.",
+  "approved": []
+}
