@@ -3,7 +3,7 @@
 ## Objetivo
 Herramienta Python para Soporte (Girag/GIT) que haga mantenimiento preventivo en Windows 10/11 con botones y progreso visible. Debe verse como `G1r4g/Girag_GLPI_MobileForms` (paleta en `girag_maint/ui/theme.py`, copiada de las variables `:root` de su `index.html`; el logo del repo es oscuro y no se ve sobre el fondo, por eso se usa el texto "GIRAG" blanco como hace su `.mark-fallback`).
 
-## Estado (v0.5.0)
+## Estado (v0.5.1)
 Hecho y verificado **solo en Linux**: UI (captura con Xvfb), parseo de progreso, planificación de bloatware, helpers de registro, flujo completo de limpieza sobre carpeta temporal (12 pruebas OK).
 **NO verificado en Windows real** — todo lo que llama a `DISM`, `sfc`, `compact`, `PowerShell Appx`, `winreg`, `reg export`, `Checkpoint-Computer`, servicios `wuauserv/bits` y la elevación UAC.
 
@@ -26,6 +26,15 @@ Hecho y verificado **solo en Linux**: UI (captura con Xvfb), parseo de progreso,
 - Barra DISM global ponderada (5/25/40/25/5). RestoreHealth se queda quieto en ~20 % y ~62 %: es normal.
 - **Seguridad**: toda acción destructiva pide confirmación (`ctx.confirm`); `ctx.dry_run` evita cambios (DISM/SFC no se ven afectados por la simulación); limpieza no sigue enlaces/junctions (`collect()`); registro solo borra rutas **absolutas, sin variables sin resolver, que no existen** (`definitely_missing`) y omite MSI/SystemComponent; si falla el respaldo `.reg`, no borra.
 - Bloatware: `protect` gana siempre sobre `remove`; se omiten paquetes `NonRemovable`, framework y firma `System`.
+
+## Cambios v0.5.1 (correcciones a partir de los logs del usuario, 16-17/10/2026)
+- Repositorio del proyecto: https://github.com/juanstm200/Fynex (rama main). Su contenido era idéntico a la v0.5.0 más un `test.txt` ("hola mundo") sin uso.
+- **Causa raíz de los errores** (`No such file ... _MEI000021582\base_library.zip` y `...\config\bloatware.json`): el .exe de PyInstaller en modo un solo archivo se extrae a `%TEMP%\_MEIxxxx` y corre desde ahí; la tarea de limpieza (que borra el Temp del usuario) eliminó los archivos no bloqueados de esa carpeta (liberó 16 GB a las 13:39). Después fallaron todas las tareas que cargan algo «en el momento»: DISM y Compact OS (códec `oem`), bloatware (JSON), GLPI (códec `idna` de urllib) y el diagnóstico de disco. Winget funcionó porque usaba el códec `utf-8`, ya cargado.
+- **Correcciones:** (1) `cleanup.collect` omite `_MEI*` y las rutas de `system.protected_roots()` (`sys._MEIPASS`, carpeta del .exe, datos de la app) y el log lo informa; (2) `core/runtime_guard.py::warm_up()` precarga códecs/urllib/ssl/etc. y las configuraciones al arrancar; (3) `system.load_json_config` lee `config/*.json` con copia en memoria y permite sobrescribir en `C:\ProgramData\GiragMaintenance\config\`; (4) `system.runtime_ok()` evita ejecutar tareas si el entorno temporal ya fue borrado y muestra un mensaje claro en vez de trazas; (5) `build_onedir.bat` como alternativa que no depende de `%TEMP%`.
+- **Registro:** `definitely_missing(..., wow32=True)` trata `system32` como `SysWOW64` en claves `WOW6432Node` (el log marcó como huérfanas `msvcr110/msvcp110/vccorlib110.dll`, que son de 32 bits y estaban en SysWOW64; se eliminaron 3 valores de SharedDLLs, con respaldo en `ProgramData\GiragMaintenance\backups\registro_20261016_134114`). También se corrigió un fallo de lógica que ignoraba `InstallLocation` en «Programas desinstalados» y se agregó un bloqueo si el programa corre como 32 bits sobre Windows de 64.
+- UI: los diagnósticos que terminan con error ya no dicen «listo» en verde; se limpia el reloj de la tarea anterior; el log de la limpieza agrupa una línea por etiqueta (antes una por carpeta).
+- Pruebas nuevas: `tests/test_runtime.py` (reproduce el incidente: falla con el código anterior). Total 67.
+- Pendiente de verificar en Windows con el .exe reconstruido: ejecutar limpieza + DISM + bloatware + GLPI + diagnóstico en un mismo lote.
 
 ## Cambios v0.5.0 (interfaz redondeada y GLPI forzado)
 - **Base:** se partió del zip v0.4.0 que aportó el usuario (paquete `diag/` con Equipo/Disco/Batería). Un borrador paralelo de diagnóstico hecho antes en otra sesión se descartó para no duplicar.

@@ -16,8 +16,7 @@ LIST_SCRIPT = (
 
 
 def load_config():
-    with open(system.resource_path("config/bloatware.json"), encoding="utf-8") as f:
-        return json.load(f)
+    return system.load_json_config("bloatware.json")
 
 
 def _as_list(x):
@@ -57,7 +56,7 @@ class BloatwareTask(Task):
     id = "bloatware"
     title = "Eliminar bloatware"
     description = ("Quita apps preinstaladas (juegos, Bing, TikTok…). Protege Tienda, "
-                   "Calculadora y Office. Editable en config/.")
+                   "Calculadora y Office. Lista editable (ver README).")
     icon = "B"
     button = "Eliminar bloatware"
 

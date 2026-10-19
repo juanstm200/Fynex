@@ -6,6 +6,8 @@ from girag_maint.core import system
 
 def main():
     system.enable_dpi_awareness()
+    from girag_maint.core.runtime_guard import warm_up
+    warm_up()
     if system.IS_WINDOWS and not system.is_admin() and "--no-elevate" not in sys.argv:
         if system.relaunch_as_admin():
             return

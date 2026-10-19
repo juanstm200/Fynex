@@ -47,15 +47,27 @@ def extract_exe_path(cmd: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def definitely_missing(path: Optional[str], exists=os.path.exists) -> bool:
-    """True solo si es una ruta absoluta, sin variables sin resolver, que no existe."""
+def syswow_variant(p: str) -> str:
+    """C:\\Windows\\system32\\x.dll -> C:\\Windows\\SysWOW64\\x.dll (donde viven las DLL de 32 bits)."""
+    return re.sub(r"(?i)^([A-Za-z]:\\[^\\]+)\\system32\\", r"\1\\SysWOW64\\", p)
+
+
+def definitely_missing(path: Optional[str], exists=os.path.exists, wow32: bool = False) -> bool:
+    """True solo si es una ruta absoluta, sin variables sin resolver, que no existe.
+    wow32=True (claves WOW6432Node, apps de 32 bits): system32 equivale a SysWOW64, se mira también allí."""
     if not path:
         return False
     p = os.path.expandvars(path.strip().strip('"'))
     p = re.sub(r",\s*-?\d+$", "", p)  # "icono.exe,0"
     if "%" in p or not re.match(r"^[A-Za-z]:\\", p):
         return False
-    return not exists(p)
+    if exists(p):
+        return False
+    if wow32:
+        alt = syswow_variant(p)
+        if alt != p and exists(alt):
+            return False
+    return True
 
 
 # ---------- acceso al registro ----------
@@ -113,8 +125,9 @@ def check_uninstall():
                             continue
                         exe = extract_exe_path(_get(k, "UninstallString") or "")
                         loc = _get(k, "InstallLocation") or ""
-                        loc_gone = (not loc.strip()) or definitely_missing(loc.rstrip("\\") + "\\x")
-                        if definitely_missing(exe) and loc_gone:
+                        wow = "WOW6432Node" in base
+                        loc_gone = (not loc.strip()) or definitely_missing(loc, wow32=wow)
+                        if definitely_missing(exe, wow32=wow) and loc_gone:
                             yield Issue(hn, base + "\\" + sub, None, "Programas desinstalados",
                                         f"{name} (desinstalador no existe)")
                 except OSError:
@@ -144,7 +157,7 @@ def check_shared_dlls():
         try:
             with _open(winreg.HKEY_LOCAL_MACHINE, base) as k:
                 for name, _data, _t in list(_values(k)):
-                    if definitely_missing(name):
+                    if definitely_missing(name, wow32="WOW6432Node" in base):
                         yield Issue("HKLM", base, name, "DLL compartidas", name)
         except OSError:
             continue
@@ -155,7 +168,7 @@ def check_run_entries():
         try:
             with _open(_hive(hn), base) as k:
                 for name, data, _t in list(_values(k)):
-                    if isinstance(data, str) and definitely_missing(extract_exe_path(data)):
+                    if isinstance(data, str) and definitely_missing(extract_exe_path(data), wow32="WOW6432Node" in base):
                         yield Issue(hn, base, name, "Programas de inicio", f"{name} → {data}")
         except OSError:
             continue
@@ -221,6 +234,10 @@ class RegistryRepairTask(Task):
     def run(self, ctx: TaskContext) -> TaskResult:
         if winreg is None:
             return TaskResult(False, "El registro solo existe en Windows.")
+        if system.is_32bit_on_64bit():
+            return TaskResult(False, "Esta aplicación se está ejecutando como programa de 32 bits en un "
+                                     "Windows de 64 bits: el registro y las carpetas del sistema quedarían "
+                                     "redirigidos y se marcarían entradas válidas. Usa la versión de 64 bits.")
         issues, report = [], []
         for n, (cat, fn) in enumerate(CHECKS):
             ctx.check_cancel()

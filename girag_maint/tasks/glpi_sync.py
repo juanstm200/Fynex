@@ -35,11 +35,7 @@ ERROR_RX = re.compile(r"\[error\]|\bfatal\b|can't connect|cannot connect|\bfaile
 # ------------------------------------------------------------------ configuración y detección
 def load_config() -> dict:
     cfg = dict(DEFAULT_CFG)
-    try:
-        with open(system.resource_path("config/glpi.json"), encoding="utf-8") as f:
-            cfg.update(json.load(f))
-    except (OSError, ValueError):
-        pass
+    cfg.update(system.load_json_config("glpi.json", {}))
     return cfg
 
 

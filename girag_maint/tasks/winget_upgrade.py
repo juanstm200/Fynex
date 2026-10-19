@@ -23,13 +23,12 @@ def approved_path():
 
 
 def load_approved() -> set:
-    for path in (approved_path(), system.resource_path("config/winget_approved.json")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                return set(json.load(f).get("approved", []))
-        except (OSError, ValueError):
-            continue
-    return set()
+    try:
+        with open(approved_path(), encoding="utf-8") as f:
+            return set(json.load(f).get("approved", []))
+    except (OSError, ValueError):
+        pass
+    return set(system.load_json_config("winget_approved.json", {}).get("approved", []))
 
 
 def save_approved(ids) -> None:

@@ -80,9 +80,21 @@ def _is_reparse(entry) -> bool:
         return False
 
 
-def collect(root: Path):
-    """Devuelve (archivos[(ruta, tamaño)], carpetas, enlaces). No sigue enlaces/junctions."""
+def _is_runtime_dir(name: str, path: str, roots) -> bool:
+    """Carpetas que no se deben limpiar: %TEMP%\\_MEIxxxx (entorno de apps PyInstaller en ejecución,
+    incluida esta) y las rutas protegidas de la app."""
+    return name.upper().startswith("_MEI") or system.is_protected(path, roots)
+
+
+def collect(root: Path, skipped=None):
+    """Devuelve (archivos[(ruta, tamaño)], carpetas, enlaces). No sigue enlaces/junctions y OMITE las
+    carpetas protegidas (se agregan a `skipped` si se entrega la lista)."""
     files, dirs, links = [], [], []
+    roots = system.protected_roots()
+    if system.is_protected(str(root), roots):
+        if skipped is not None:
+            skipped.append(str(root))
+        return files, dirs, links
     if root.is_file():
         try:
             return [(str(root), root.stat().st_size)], [], []
@@ -101,6 +113,10 @@ def collect(root: Path):
                     if _is_reparse(e):
                         links.append(e.path)
                     elif e.is_dir(follow_symlinks=False):
+                        if _is_runtime_dir(e.name, e.path, roots):
+                            if skipped is not None:
+                                skipped.append(e.path)
+                            continue
                         dirs.append(e.path)
                         stack.append(e.path)
                     else:
@@ -156,17 +172,23 @@ class CleanupTask(Task):
         ctx.status("Analizando carpetas…")
         ctx.progress(None)
         targets = build_targets()
-        plan, total_files, total_bytes = [], 0, 0
+        plan, total_files, total_bytes, protected, agg = [], 0, 0, [], {}
         for t in targets:
             ctx.check_cancel()
-            files, dirs, links = collect(t.path)
+            files, dirs, links = collect(t.path, protected)
             if not (files or dirs or links):
                 continue
             size = sum(s for _, s in files)
             plan.append((t, files, dirs, links))
             total_files += len(files)
             total_bytes += size
-            ctx.log(f"{t.label}: {len(files)} archivos ({human_size(size)})", "dim")
+            n, b = agg.get(t.label, (0, 0))
+            agg[t.label] = (n + len(files), b + size)
+        for label, (n, b) in agg.items():          # una línea por etiqueta (no una por carpeta)
+            ctx.log(f"{label}: {n} archivos ({human_size(b)})", "dim")
+        if protected:
+            ctx.log(f"Se omitieron {len(protected)} carpeta(s) en uso por aplicaciones empaquetadas "
+                    "(_MEI…), incluida esta aplicación.", "dim")
 
         if total_files == 0 and not any(p[3] for p in plan):
             return TaskResult(True, "No había archivos que limpiar.")
@@ -195,6 +217,9 @@ class CleanupTask(Task):
                     stopped.append(svc)
 
         freed = deleted = skipped = done = 0
+        remaining = {}
+        for t, *_ in plan:
+            remaining[t.label] = remaining.get(t.label, 0) + 1
         try:
             for t, files, dirs, links in plan:
                 ctx.status(f"Limpiando: {t.label}")
@@ -221,7 +246,9 @@ class CleanupTask(Task):
                         os.rmdir(d)
                     except OSError:
                         pass
-                ctx.log(f"✔ {t.label} (liberado hasta ahora: {human_size(freed)})", "ok")
+                remaining[t.label] -= 1
+                if remaining[t.label] == 0:
+                    ctx.log(f"✔ {t.label} (liberado hasta ahora: {human_size(freed)})", "ok")
         finally:
             for svc in stopped:
                 ctx.log(f"Reiniciando servicio {svc}…", "dim")

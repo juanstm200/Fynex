@@ -470,23 +470,31 @@ class App(tk.Tk):
     def _start_diag(self, title, func):
         if self.busy or self.diag_busy:
             return
+        ok, msg = system.runtime_ok()
+        if not ok:
+            messagebox.showerror("Archivos temporales eliminados", msg)
+            return
         if not system.IS_WINDOWS:
             messagebox.showwarning("Solo Windows", "Este diagnóstico lee datos de Windows (WMI/PowerShell) "
                                    "y solo funciona en Windows 10/11.")
             return
         self._set_diag_busy(True)
         self._clear_log()
+        self.elapsed.configure(text="")
         self.status.configure(text=f"Consultando: {title}…", fg=T.INK)
         self._log(f"Consultando {title.lower()}… (puede tardar unos segundos)", "dim")
         threading.Thread(target=self._diag_worker, args=(title, func), daemon=True).start()
 
     def _diag_worker(self, title, func):
+        failed = False
         try:
             for text, level in func():
+                failed = failed or level == "err"
                 self.events.put(("log", text, level))
         except Exception as e:
+            failed = True
             self.events.put(("log", f"Error: {e}", "err"))
-        self.events.put(("diag_done", title))
+        self.events.put(("diag_done", title, failed))
 
     def _set_diag_busy(self, flag):
         self.diag_busy = flag
@@ -499,6 +507,10 @@ class App(tk.Tk):
     # ---------- ejecución ----------
     def _run(self, tasks):
         if self.busy or self.diag_busy or not tasks:
+            return
+        ok, msg = system.runtime_ok()
+        if not ok:
+            messagebox.showerror("Archivos temporales eliminados", msg)
             return
         if not system.IS_WINDOWS and any(t.needs_windows for t in tasks):
             messagebox.showwarning("Solo Windows", "Estas tareas solo funcionan en Windows 10/11.\n"
@@ -560,7 +572,9 @@ class App(tk.Tk):
                     reply.put(dlg.result)
                 elif kind == "diag_done":
                     self._set_diag_busy(False)
-                    self.status.configure(text=f"{p[0]}: listo.", fg=T.OK)
+                    failed = len(p) > 1 and p[1]
+                    self.status.configure(text=f"{p[0]}: terminó con errores (revisa la consola)." if failed
+                                          else f"{p[0]}: listo.", fg=T.ERR if failed else T.OK)
                 elif kind == "begin":
                     self._begin(*p)
                 elif kind == "end":

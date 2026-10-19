@@ -2,7 +2,7 @@
 
 Aplicación de escritorio en **Python (Tkinter, sin dependencias externas)** para que el equipo de Soporte de Girag realice **mantenimiento preventivo en equipos con Windows 10 y 11**. Interfaz y colores tomados de [Girag_GLPI_MobileForms](https://github.com/G1r4g/Girag_GLPI_MobileForms) (fondo `#0c1526`, tarjetas `#141f36`, acento naranja `#e8823f`).
 
-> **Estado:** v0.5.0 — prototipo funcional. Lógica y UI probadas en Linux (pruebas unitarias + captura con Xvfb). **Aún NO probado en un Windows real**: ver `HANDOFF.md` antes de usarlo en producción.
+> **Estado:** v0.5.1 — prototipo funcional. Lógica y UI probadas en Linux (pruebas unitarias + captura con Xvfb). **Aún NO probado en un Windows real**: ver `HANDOFF.md` antes de usarlo en producción.
 
 ## Funciones
 
@@ -51,6 +51,9 @@ python -m unittest discover -s tests
 ```
 (Corren en cualquier sistema; cubren parseo de progreso, planificador de bloatware, ayudantes del registro y el flujo de limpieza.)
 
+## Personalizar listas (bloatware, GLPI, winget)
+Los archivos de `config\` van **dentro** del .exe y se extraen a una carpeta temporal en cada ejecución, así que editarlos allí no sirve. Para personalizar: copia el archivo (por ejemplo `config\bloatware.json`) a `C:\ProgramData\GiragMaintenance\config\` y edítalo ahí; **tiene prioridad** sobre el incluido.
+
 ## Dónde guarda cosas
 - Logs: `C:\ProgramData\GiragMaintenance\logs\`
 - Respaldos del registro: `C:\ProgramData\GiragMaintenance\backups\registro_<fecha>\` (doble clic en un `.reg` para restaurar).
@@ -76,6 +79,6 @@ Para añadir una tarea: crear clase que herede de `tasks/base.py::Task`, impleme
 > Importante: sube **todo el contenido** del proyecto, incluidas las carpetas `girag_maint/`, `config/` y `tests/` (en la web de GitHub, arrastrar archivos sueltos no sube carpetas). Lo más fiable es usar git:
 
 ```bash
-git remote add origin https://github.com/G1r4g/Girag_WinMaintenanceTool.git
+git remote add origin https://github.com/juanstm200/Fynex.git
 git push -u origin main
 ```
