@@ -48,6 +48,15 @@ def enable_dpi_awareness() -> None:
         pass
 
 
+def set_app_id(app_id: str) -> None:
+    """Identidad propia en la barra de tareas (icono y agrupación de Fynex, no los de python.exe)."""
+    if IS_WINDOWS:
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except Exception:
+            pass
+
+
 def windows_version() -> str:
     if not IS_WINDOWS:
         return platform.platform()
@@ -65,10 +74,18 @@ def resource_path(rel: str) -> Path:
 
 
 def data_dir() -> Path:
+    """Datos de la app: C:\\ProgramData\\Fynex. Si existe la carpeta de versiones anteriores
+    (GiragMaintenance) y la nueva aún no, se renombra para conservar logs, respaldos y listas."""
     if IS_WINDOWS:
-        root = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "GiragMaintenance"
+        base = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData"))
+        root, legacy = base / "Fynex", base / "GiragMaintenance"
     else:
-        root = Path.home() / ".girag_maintenance"
+        root, legacy = Path.home() / ".fynex", Path.home() / ".girag_maintenance"
+    if not root.exists() and legacy.exists():
+        try:
+            legacy.rename(root)
+        except OSError:
+            root = legacy            # sin permisos para renombrar: se sigue usando la carpeta anterior
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -131,7 +148,7 @@ _CONFIG_CACHE = {}
 
 
 def load_json_config(name: str, default=None):
-    """Lee config/<name>. Orden: C:\\ProgramData\\GiragMaintenance\\config\\<name> (personalizable, sobrevive
+    """Lee config/<name>. Orden: C:\\ProgramData\\Fynex\\config\\<name> (personalizable, sobrevive
     entre ejecuciones) y luego la copia incluida en la app. Queda en memoria: si alguien borra el archivo
     con la app abierta, se sigue usando la copia ya leída."""
     if name in _CONFIG_CACHE:

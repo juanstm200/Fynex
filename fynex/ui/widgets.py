@@ -10,7 +10,7 @@ import zlib
 
 from . import theme as T
 
-_CACHE = {}   # (r, fill, border, bg, bw) -> {"tl","tr","bl","br"} (referencias vivas)
+_CACHE = {}   # (raíz, r, fill, border, bg, bw) -> {"tl","tr","bl","br"} (referencias vivas)
 
 
 # ------------------------------------------------------------------ imágenes
@@ -53,11 +53,12 @@ def corner_pixels(r, fill, border, bg, bw=1):
 
 
 def corner_images(r, fill, border, bg, bw=1):
-    key = (r, fill, border, bg, bw)
+    root = tk._default_root           # las imágenes pertenecen a la ventana raíz que las creó
+    key = (root, r, fill, border, bg, bw)
     if key not in _CACHE:
         tl = corner_pixels(r, fill, border, bg, bw)
         variants = {"tl": tl, "tr": [row[::-1] for row in tl], "bl": tl[::-1], "br": [row[::-1] for row in tl[::-1]]}
-        _CACHE[key] = {k: tk.PhotoImage(data=base64.b64encode(_png(r, r, v))) for k, v in variants.items()}
+        _CACHE[key] = {k: tk.PhotoImage(master=root, data=base64.b64encode(_png(r, r, v))) for k, v in variants.items()}
     return _CACHE[key]
 
 
@@ -212,6 +213,7 @@ class RoundedProgress(tk.Canvas):
         super().__init__(parent, height=height, bg=parent.cget("bg"), bd=0, highlightthickness=0)
         self.color, self.trough, self.h = color, trough, height
         self.value, self.mode, self._job, self._pos, self._dir = 0.0, "determinate", None, 0.0, 1
+        self._ids = None                      # (fondo, barra): se crean una vez y solo se mueven (sin parpadeo)
         self.bind("<Configure>", lambda e: self._draw())
 
     def __setitem__(self, key, val):
@@ -253,17 +255,22 @@ class RoundedProgress(tk.Canvas):
         self._job = self.after(30, self._step)
 
     def _draw(self):
-        self.delete("all")
         w, h = self.winfo_width(), self.h
         if w < h + 2:
             return
         y, r = h / 2, h / 2
-        self.create_line(r, y, w - r, y, width=h, capstyle="round", fill=self.trough)
         span = w - 2 * r
         if self.mode == "indeterminate":
             seg = span * 0.28
             x0 = r + (span - seg) * self._pos
-            self.create_line(x0, y, x0 + seg, y, width=h, capstyle="round", fill=self.color)
-        elif self.value > 0:
-            x1 = r + span * min(self.value, 100) / 100
-            self.create_line(r, y, max(x1, r + 0.5), y, width=h, capstyle="round", fill=self.color)
+            x1, show = x0 + seg, True
+        else:
+            x0, x1, show = r, max(r + span * min(self.value, 100) / 100, r + 0.5), self.value > 0
+        if self._ids is None:
+            self.delete("all")
+            self._ids = (self.create_line(r, y, w - r, y, width=h, capstyle="round", fill=self.trough),
+                         self.create_line(x0, y, x1, y, width=h, capstyle="round", fill=self.color))
+        back, bar = self._ids
+        self.coords(back, r, y, w - r, y)
+        self.coords(bar, x0, y, x1, y)
+        self.itemconfigure(bar, state="normal" if show else "hidden")

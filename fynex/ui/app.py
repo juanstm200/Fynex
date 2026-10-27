@@ -1,9 +1,10 @@
-"""Interfaz Tkinter con el estilo visual de Girag (tema oscuro + acento naranja)."""
+"""Interfaz Tkinter de Fynex (tema oscuro azul marino + acento naranja)."""
 import os
 import queue
 import threading
 import time
 import tkinter as tk
+import traceback
 from tkinter import messagebox, ttk
 
 from .. import APP_NAME, __version__
@@ -11,7 +12,9 @@ from ..core import system
 from ..core.runner import run_tasks
 from ..diag import battery, disk, sysinfo
 from ..tasks import ALL_TASKS
+from . import assets
 from . import theme as T
+from .chrome import TitleBar, WindowChrome
 from .widgets import RoundedButton, RoundedPanel, RoundedProgress
 
 LOG_COLORS = {"info": T.INK, "dim": T.INK_SOFT, "ok": T.OK, "err": T.ERR, "warn": T.ACCENT}
@@ -36,7 +39,7 @@ def _button(parent, text, command, primary=False, **kw):
 
 
 class CheckBox(tk.Label):
-    """Casilla grande y legible: ☐ gris / ☑ naranja Girag."""
+    """Casilla grande y legible: ☐ gris / ☑ naranja Fynex."""
 
     def __init__(self, parent, variable, bg, size=17):
         super().__init__(parent, bg=bg, cursor="hand2", font=("Segoe UI Symbol", size))
@@ -71,7 +74,7 @@ def _scrollable(parent):
     """Canvas desplazable con rueda del mouse. Devuelve (contenedor, frame_interno, canvas)."""
     wrap = tk.Frame(parent, bg=T.PAPER)
     canvas = tk.Canvas(wrap, bg=T.PAPER, highlightthickness=0, bd=0)
-    vsb = ttk.Scrollbar(wrap, style="Girag.Vertical.TScrollbar", orient="vertical", command=canvas.yview)
+    vsb = ttk.Scrollbar(wrap, style="Fynex.Vertical.TScrollbar", orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=vsb.set)
     canvas.pack(side="left", fill="both", expand=True)
     inner = tk.Frame(canvas, bg=T.PAPER)
@@ -99,8 +102,19 @@ def _scrollable(parent):
     return wrap, inner, canvas
 
 
+def _bring_front(win):
+    """Lleva el diálogo al frente con foco: si queda detrás, Windows hace parpadear el botón de la barra de tareas."""
+    def go():
+        try:
+            win.lift()
+            win.focus_force()
+        except tk.TclError:
+            pass
+    win.after(30, go)
+
+
 class ConfirmDialog(tk.Toplevel):
-    def __init__(self, parent, title, message, details=""):
+    def __init__(self, parent, title, message, details="", ok_text="Continuar"):
         super().__init__(parent, bg=T.PAPER)
         self.result = False
         self.title(title)
@@ -120,12 +134,13 @@ class ConfirmDialog(tk.Toplevel):
             box.pack(padx=18, pady=(0, 10), fill="x")
         row = tk.Frame(body, bg=T.CARD)
         row.pack(fill="x", padx=18, pady=(4, 16))
-        _button(row, "Continuar", lambda: self._close(True), primary=True).pack(side="right")
+        _button(row, ok_text, lambda: self._close(True), primary=True).pack(side="right")
         _button(row, "Cancelar", lambda: self._close(False), pady=7).pack(side="right", padx=(0, 10))
         self.protocol("WM_DELETE_WINDOW", lambda: self._close(False))
         _center(self, parent)
         self.grab_set()
         self.focus_set()
+        _bring_front(self)
 
     def _close(self, value):
         self.result = value
@@ -191,6 +206,7 @@ class ChooseDialog(tk.Toplevel):
         _center(self, parent, third=False)
         self.grab_set()
         self.focus_set()
+        _bring_front(self)
 
     def _count(self):
         self.count.configure(text=f"{sum(v.get() for v in self.vars.values())} de {len(self.vars)} seleccionadas")
@@ -260,14 +276,24 @@ class App(tk.Tk):
         self.total = 1
         self.idx = 0
         self.pb_mode = "determinate"
+        self._last_pct = None             # último progreso real (para restaurarlo tras esperar una aprobación)
+        self._prev_status = ""
         self.dry_run = tk.BooleanVar(value=False)
         self.cards = []
         self.diag_busy = False
         self.diag_btns = []
         self._style()
+        assets.set_window_icon(self)
+        self.chrome = WindowChrome(self, self._on_close)
+        self._build_titlebar()
         self._build_header()
         self._build_body()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        if self.chrome.enabled:
+            self.bind("<Configure>", self.chrome.on_configure, add="+")
+            self.update_idletasks()
+            for ms in (30, 400):         # se reaplica por si Tk repone el marco al mostrar la ventana
+                self.after(ms, self._apply_chrome)
         self.after(80, self._poll)
         self.after(500, self._tick)
         self._log(f"{system.windows_version()} · {'Administrador' if system.is_admin() else 'SIN permisos de administrador'}", "dim")
@@ -276,25 +302,49 @@ class App(tk.Tk):
     def _style(self):
         s = ttk.Style(self)
         s.theme_use("clam")
-        s.configure("Girag.Horizontal.TProgressbar", troughcolor=T.CARD_2, background=T.ACCENT,
+        s.configure("Fynex.Horizontal.TProgressbar", troughcolor=T.CARD_2, background=T.ACCENT,
                     bordercolor=T.LINE, lightcolor=T.ACCENT, darkcolor=T.ACCENT, thickness=12)
         s.configure("Total.Horizontal.TProgressbar", troughcolor=T.CARD_2, background=T.OK,
                     bordercolor=T.LINE, lightcolor=T.OK, darkcolor=T.OK, thickness=6)
-        s.configure("Girag.Vertical.TScrollbar", background=T.CARD_2, troughcolor=T.PAPER,
+        s.configure("Fynex.Vertical.TScrollbar", background=T.CARD_2, troughcolor=T.PAPER,
                     bordercolor=T.PAPER, arrowcolor=T.INK_SOFT, lightcolor=T.CARD_2, darkcolor=T.CARD_2)
-        s.map("Girag.Vertical.TScrollbar", background=[("active", T.LINE), ("!active", T.CARD_2)],
+        s.map("Fynex.Vertical.TScrollbar", background=[("active", T.LINE), ("!active", T.CARD_2)],
               lightcolor=[("!disabled", T.CARD_2)], darkcolor=[("!disabled", T.CARD_2)])
+
+    def _build_titlebar(self):
+        """Barra de título propia (reemplaza la nativa de Windows)."""
+        self.titlebar = None
+        if not self.chrome.enabled:
+            return
+        self._bar_icon = assets.mark_image(self, 16)
+        self.titlebar = TitleBar(self, self.chrome, APP_NAME, self._bar_icon, assets.ui_scale(self))
+        self.titlebar.pack(fill="x")
+        tk.Frame(self, bg=T.LINE, height=1).pack(fill="x")
+
+    def _apply_chrome(self):
+        if self.chrome.apply():
+            return
+        if self.titlebar is not None:        # no se pudo quitar la barra nativa: se usa la de Windows
+            self.titlebar.pack_forget()
+            self.titlebar = None
 
     def _build_header(self):
         bar = tk.Frame(self, bg=T.PAPER)
         bar.pack(fill="x")
         inner = tk.Frame(bar, bg=T.PAPER)
-        inner.pack(fill="x", padx=24, pady=14)
-        tk.Label(inner, text="GIRAG", bg=T.PAPER, fg="#ffffff", font=_font(20, "bold")).pack(side="left")
-        tk.Label(inner, text="  ·  Mantenimiento preventivo", bg=T.PAPER, fg=T.INK_SOFT,
-                 font=_font(12)).pack(side="left", padx=(8, 0))
+        inner.pack(fill="x", padx=24, pady=12)
+        brand = tk.Frame(inner, bg=T.PAPER)
+        brand.pack(side="left")
+        self._logo = assets.mark_image(self, 40)
+        if self._logo is not None:
+            tk.Label(brand, image=self._logo, bg=T.PAPER).pack(side="left", padx=(0, 12))
+        words = tk.Frame(brand, bg=T.PAPER)
+        words.pack(side="left")
+        tk.Label(words, text="FYNEX", bg=T.PAPER, fg="#ffffff", font=_font(20)).pack(anchor="w")
+        tk.Label(words, text="PRECISION IN EVERY PROCESS", bg=T.PAPER, fg=T.TAGLINE,
+                 font=_font(7)).pack(anchor="w")
         tools = tk.Frame(inner, bg=T.PAPER)
-        tools.pack(side="left", padx=(28, 0))
+        tools.pack(side="left", padx=(32, 0))
         for text, title, fn in (("Equipo", "Información del equipo", sysinfo.run),
                                 ("Disco", "Estado del disco", disk.run),
                                 ("Batería", "Estado de la batería", battery.run)):
@@ -370,7 +420,7 @@ class App(tk.Tk):
         logpanel = RoundedPanel(pb_, fill=T.PAPER, border=T.LINE, radius=14, parent_bg=T.CARD)
         logpanel.pack(fill="both", expand=True, padx=18)
         logwrap = logpanel.body
-        sb = ttk.Scrollbar(logwrap, style="Girag.Vertical.TScrollbar", orient="vertical")
+        sb = ttk.Scrollbar(logwrap, style="Fynex.Vertical.TScrollbar", orient="vertical")
         self.log = tk.Text(logwrap, bg=T.PAPER, fg=T.INK, relief="flat", font=("Consolas", 9), wrap="word",
                            state="disabled", yscrollcommand=sb.set, insertbackground=T.INK, padx=10, pady=8,
                            highlightthickness=0, bd=0)
@@ -408,15 +458,23 @@ class App(tk.Tk):
         tasks = self._selected()
         if not tasks or self.busy:
             return
+        if len(tasks) == 1:                    # una sola tarea: su propia confirmación ya es la única aprobación
+            self._run(tasks)
+            return
         details = "\n".join(f"{i}. {t.title}" for i, t in enumerate(tasks, 1))
         note = "\n\nMODO SIMULACIÓN activo: no se modificará nada." if self.dry_run.get() else ""
-        dlg = ConfirmDialog(self, "Ejecutar tareas seleccionadas",
-                            f"Se ejecutarán {len(tasks)} tareas, una tras otra y en este orden. Cada tarea "
-                            "te pedirá confirmación antes de modificar algo. «Cancelar» detiene todo el lote."
-                            + note, details)
+        if any(t.id == "winget" for t in tasks) and not self.dry_run.get():
+            note += ("\n\nActualizar aplicaciones usará solo la lista de aprobadas ★; si todavía no hay ninguna, "
+                     "te mostrará la lista para que elijas.")
+        dlg = ConfirmDialog(self, "Aprobar el lote",
+                            f"Se ejecutarán {len(tasks)} tareas, una tras otra y en este orden.\n\n"
+                            "Al aprobar autorizas TODAS las acciones de estas tareas de una sola vez: no se volverá a "
+                            "pedir confirmación durante el lote. Lo que se detecte y modifique queda en la consola y en "
+                            "el log. «Cancelar todo» detiene el lote en cualquier momento." + note, details,
+                            ok_text="Aprobar y ejecutar")
         self.wait_window(dlg)
         if dlg.result:
-            self._run(tasks)
+            self._run(tasks, auto_approve=True)
 
     # ---------- utilidades UI ----------
     def _log(self, msg, level="info"):
@@ -440,6 +498,7 @@ class App(tk.Tk):
             messagebox.showinfo("Logs", path)
 
     def _set_progress(self, pct):
+        self._last_pct = pct
         if pct is None:
             if self.pb_mode != "indeterminate":
                 self.pb.configure(mode="indeterminate")
@@ -456,6 +515,29 @@ class App(tk.Tk):
         if self.total > 1:
             frac = (self.idx - 1 + ((pct or 0) / 100)) / self.total
             self.pb_total["value"] = max(0, min(frac, 1)) * 100
+
+    def _wait_user(self, waiting):
+        """Mientras hay un diálogo esperando al usuario la barra se queda quieta (sin animación ni parpadeo)."""
+        if waiting:
+            self._prev_status = self.status.cget("text")
+            self.pb.stop()
+            self.pb_mode = "determinate"
+            self.pb.configure(mode="determinate")
+            self.pb["value"] = self._last_pct or 0
+            self.pct.configure(text="en espera")
+            self.status.configure(text="Esperando tu aprobación…", fg=T.ACCENT)
+        else:
+            self.status.configure(text=self._prev_status, fg=T.INK)
+            self._set_progress(self._last_pct)
+
+    def _ask(self, dialog):
+        """Muestra un diálogo modal con la barra en pausa y devuelve su resultado."""
+        self._wait_user(True)
+        try:
+            self.wait_window(dialog)
+        finally:
+            self._wait_user(False)
+        return dialog.result
 
     def _set_busy(self, busy):
         self.busy = busy
@@ -505,7 +587,7 @@ class App(tk.Tk):
         self._update_selection()
 
     # ---------- ejecución ----------
-    def _run(self, tasks):
+    def _run(self, tasks, auto_approve=False):
         if self.busy or self.diag_busy or not tasks:
             return
         ok, msg = system.runtime_ok()
@@ -537,11 +619,11 @@ class App(tk.Tk):
             self.batch_frame.pack_forget()
             self.status.pack_configure(pady=(16, 8))
         self._set_progress(None)
-        threading.Thread(target=self._worker, args=(tasks, self.dry_run.get()), daemon=True).start()
+        threading.Thread(target=self._worker, args=(tasks, self.dry_run.get(), auto_approve), daemon=True).start()
 
-    def _worker(self, tasks, dry):
+    def _worker(self, tasks, dry, auto_approve=False):
         run_tasks(tasks, self.events, self.cancel_event, dry_run=dry, log_dir=system.logs_dir(),
-                  set_ctx=lambda c: setattr(self, "ctx", c))
+                  set_ctx=lambda c: setattr(self, "ctx", c), auto_approve=auto_approve)
 
     def _cancel(self):
         if self.busy and self.ctx:
@@ -562,14 +644,10 @@ class App(tk.Tk):
                     self._set_progress(p[0])
                 elif kind == "confirm":
                     title, message, details, reply = p
-                    dlg = ConfirmDialog(self, title, message, details)
-                    self.wait_window(dlg)
-                    reply.put(dlg.result)
+                    reply.put(self._ask(ConfirmDialog(self, title, message, details)))
                 elif kind == "choose":
                     title, message, items, pre, remember_label, reply = p
-                    dlg = ChooseDialog(self, title, message, items, pre, remember_label)
-                    self.wait_window(dlg)
-                    reply.put(dlg.result)
+                    reply.put(self._ask(ChooseDialog(self, title, message, items, pre, remember_label)))
                 elif kind == "diag_done":
                     self._set_diag_busy(False)
                     failed = len(p) > 1 and p[1]
@@ -628,6 +706,25 @@ class App(tk.Tk):
         if self.busy:
             s = int(time.time() - self.started)
             self.elapsed.configure(text=f"Tiempo: {s // 60:02d}:{s % 60:02d}")
+
+    def report_callback_exception(self, exc, val, tb):
+        """En el .exe sin consola los errores de la interfaz se perdían: se muestran en la consola de la app y se guardan."""
+        text = "".join(traceback.format_exception(exc, val, tb))
+        try:
+            self._log("Error interno de la interfaz (se guardó en logs\\fynex_ui_errors.log):\n" + text, "err")
+            with open(system.logs_dir() / "fynex_ui_errors.log", "a", encoding="utf-8") as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\n{text}\n")
+        except Exception:
+            pass
+
+    def destroy(self):
+        """Cancela los temporizadores pendientes antes de cerrar (evita avisos de Tk al salir)."""
+        try:
+            for after_id in self.tk.splitlist(self.tk.call("after", "info")):
+                self.after_cancel(after_id)
+        except tk.TclError:
+            pass
+        super().destroy()
 
     def _on_close(self):
         if self.busy:

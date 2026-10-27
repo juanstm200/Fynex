@@ -9,11 +9,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from girag_maint.core.context import TaskContext
-from girag_maint.core.process import LineSplitter, decode_output, parse_percent
-from girag_maint.tasks import bloatware, cleanup
-from girag_maint.tasks.dism_repair import interpret_sfc
-from girag_maint.tasks.registry_repair import definitely_missing, extract_exe_path
+from fynex.core.context import TaskContext
+from fynex.core.process import LineSplitter, decode_output, parse_percent
+from fynex.tasks import bloatware, cleanup
+from fynex.tasks.dism_repair import interpret_sfc
+from fynex.tasks.registry_repair import definitely_missing, extract_exe_path
 
 
 def make_ctx(dry=False):
@@ -119,7 +119,7 @@ class CleanupFlowTest(unittest.TestCase):
 
     def _run(self, dry):
         import queue as q
-        from girag_maint.tasks.cleanup import CleanupTask, Target
+        from fynex.tasks.cleanup import CleanupTask, Target
         with tempfile.TemporaryDirectory() as d:
             root = Path(d) / "tmp"
             (root / "x").mkdir(parents=True)
@@ -181,7 +181,7 @@ class ProtectedAppsTests(unittest.TestCase):
 
 class GlpiSyncTests(unittest.TestCase):
     def test_progress_monotonic_and_capped(self):
-        from girag_maint.tasks.glpi_sync import SyncProgress
+        from fynex.tasks.glpi_sync import SyncProgress
         m, last = SyncProgress(), 0
         for line in ["[info] target server0: server https://x", "[info] running task Inventory",
                      "[info] collecting", "[info] sending inventory", "[info] inventory accepted"] + ["x"] * 200:
@@ -192,20 +192,20 @@ class GlpiSyncTests(unittest.TestCase):
         self.assertGreaterEqual(last, 95)
 
     def test_analyze(self):
-        from girag_maint.tasks.glpi_sync import analyze
+        from fynex.tasks.glpi_sync import analyze
         self.assertTrue(analyze(["[info] ok"], 0)[0])
         self.assertFalse(analyze(["[error] Can't connect to host"], 0)[0])
         self.assertFalse(analyze(["[info] ok"], 2)[0])
 
     def test_command_and_config(self):
-        from girag_maint.tasks.glpi_sync import build_command, load_config
+        from fynex.tasks.glpi_sync import build_command, load_config
         self.assertEqual(load_config()["server_url"], "https://soporte.girag.com/plugins/glpiinventory")
         self.assertEqual(build_command("a.bat", "https://s")[1:], ["--force", "--tasks=inventory", "--server=https://s"])
 
     @unittest.skipIf(os.name == "nt", "usa un script sh como agente falso")
     def test_full_flow_with_fake_agent(self):
         import queue as q
-        from girag_maint.tasks import glpi_sync
+        from fynex.tasks import glpi_sync
         with tempfile.TemporaryDirectory() as d:
             fake = Path(d) / "agent.sh"
             fake.write_text("#!/bin/sh\necho '[info] target server0'\necho '[info] running task Inventory'\n"
@@ -228,7 +228,7 @@ class GlpiSyncTests(unittest.TestCase):
             self.assertEqual(prog[-1], 100.0)
 
     def test_missing_agent_and_unreachable_server(self):
-        from girag_maint.tasks import glpi_sync
+        from fynex.tasks import glpi_sync
         orig = (glpi_sync.find_agent, glpi_sync.check_server)
         try:
             glpi_sync.find_agent = lambda cfg: None
@@ -259,7 +259,7 @@ ES_TABLE = (
 
 class WingetParseTests(unittest.TestCase):
     def test_english_table(self):
-        from girag_maint.tasks.winget_upgrade import parse_upgrade_table
+        from fynex.tasks.winget_upgrade import parse_upgrade_table
         items = parse_upgrade_table(EN_TABLE, approved={"Google.Chrome"})
         self.assertEqual([i["id"] for i in items], ["7zip.7zip", "Google.Chrome", "Vendor.Very.Long.Pack…"])
         self.assertEqual(items[0]["detail"], "23.01 → 24.08")
@@ -268,16 +268,16 @@ class WingetParseTests(unittest.TestCase):
         self.assertTrue(items[2]["disabled"])          # ID truncado: no se puede actualizar por ID
 
     def test_spanish_table_and_footer(self):
-        from girag_maint.tasks.winget_upgrade import parse_upgrade_table
+        from fynex.tasks.winget_upgrade import parse_upgrade_table
         items = parse_upgrade_table(ES_TABLE)
         self.assertEqual([i["id"] for i in items], ["Mozilla.Firefox"])
 
     def test_no_table(self):
-        from girag_maint.tasks.winget_upgrade import parse_upgrade_table
+        from fynex.tasks.winget_upgrade import parse_upgrade_table
         self.assertEqual(parse_upgrade_table("No installed package found matching input criteria."), [])
 
     def test_command(self):
-        from girag_maint.tasks.winget_upgrade import upgrade_command
+        from fynex.tasks.winget_upgrade import upgrade_command
         cmd = upgrade_command("winget", {"id": "7zip.7zip", "source": "winget"})
         for flag in ("--id", "7zip.7zip", "--exact", "--silent", "--source"):
             self.assertIn(flag, cmd)
@@ -287,7 +287,7 @@ class WingetFlowTest(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "usa un script sh como winget falso")
     def test_selected_apps_only_and_failures_reported(self):
         import queue as q
-        from girag_maint.tasks import winget_upgrade as wu
+        from fynex.tasks import winget_upgrade as wu
         items = [{"id": "good.app", "name": "Good", "detail": "1 → 2", "source": "winget", "approved": True, "disabled": False},
                  {"id": "bad.app", "name": "Bad", "detail": "1 → 2", "source": "winget", "approved": False, "disabled": False},
                  {"id": "skip.app", "name": "Skip", "detail": "1 → 2", "source": "winget", "approved": False, "disabled": False}]
@@ -330,8 +330,8 @@ class WingetFlowTest(unittest.TestCase):
 
 class BatchRunnerTests(unittest.TestCase):
     def _tasks(self):
-        from girag_maint.core.context import TaskResult
-        from girag_maint.tasks.base import Task
+        from fynex.core.context import TaskResult
+        from fynex.tasks.base import Task
         order = []
 
         def make(tid, ok=True, boom=False):
@@ -348,7 +348,7 @@ class BatchRunnerTests(unittest.TestCase):
         return order, make
 
     def test_runs_in_given_order_and_continues_after_failure(self):
-        from girag_maint.core.runner import run_tasks
+        from fynex.core.runner import run_tasks
         order, make = self._tasks()
         events = queue.Queue()
         results = run_tasks([make("a"), make("b", boom=True), make("c", ok=False), make("d")],
@@ -362,7 +362,7 @@ class BatchRunnerTests(unittest.TestCase):
         self.assertEqual(kinds[-1], "done")
 
     def test_cancel_stops_remaining(self):
-        from girag_maint.core.runner import run_tasks
+        from fynex.core.runner import run_tasks
         order, make = self._tasks()
         cancel = threading.Event()
         first = make("a")

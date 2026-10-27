@@ -6,8 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from girag_maint.diag import battery, disk, sysinfo
-from girag_maint.diag.common import as_list, extract_json
+from fynex.diag import battery, disk, sysinfo
+from fynex.diag.common import as_list, extract_json
 
 
 def ata_blob(attrs):

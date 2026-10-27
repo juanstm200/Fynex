@@ -54,7 +54,7 @@ def parse_powercfg_xml(data: bytes) -> list:
 
 
 def powercfg_batteries() -> list:
-    path = os.path.join(tempfile.gettempdir(), "girag_battery_report.xml")
+    path = os.path.join(tempfile.gettempdir(), "fynex_battery_report.xml")
     try:
         subprocess.run(["powercfg", "/batteryreport", "/xml", "/output", path], capture_output=True,
                        timeout=60, creationflags=system.CREATE_NO_WINDOW)

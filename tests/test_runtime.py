@@ -12,11 +12,11 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from girag_maint.core import system
-from girag_maint.core.context import TaskContext
-from girag_maint.core.runtime_guard import warm_up
-from girag_maint.tasks import cleanup
-from girag_maint.tasks.registry_repair import definitely_missing, syswow_variant
+from fynex.core import system
+from fynex.core.context import TaskContext
+from fynex.core.runtime_guard import warm_up
+from fynex.tasks import cleanup
+from fynex.tasks.registry_repair import definitely_missing, syswow_variant
 
 
 def run_cleanup(targets):

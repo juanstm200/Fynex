@@ -11,8 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from girag_maint.core.context import TaskContext
-from girag_maint.tasks import glpi_sync as g
+from fynex.core.context import TaskContext
+from fynex.tasks import glpi_sync as g
 
 
 def make_ctx(dry=False):

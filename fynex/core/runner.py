@@ -6,9 +6,10 @@ from pathlib import Path
 from .context import Cancelled, TaskContext, TaskResult
 
 
-def run_tasks(tasks, events, cancel_event, dry_run=False, log_dir=None, set_ctx=None):
+def run_tasks(tasks, events, cancel_event, dry_run=False, log_dir=None, set_ctx=None, auto_approve=False):
     """Eventos emitidos: ("begin", i, n, task), ("end", task, result), ("done", [(task, result)]).
-    Cancelar detiene el lote completo; la cancelación de un diálogo solo omite esa tarea."""
+    Cancelar detiene el lote completo; la cancelación de un diálogo solo omite esa tarea.
+    auto_approve=True: el usuario ya aprobó todo el lote una vez; las tareas no vuelven a pedir confirmación."""
     stamp = time.strftime("%Y%m%d_%H%M%S")
     results, n = [], len(tasks)
     for i, task in enumerate(tasks, 1):
@@ -16,7 +17,7 @@ def run_tasks(tasks, events, cancel_event, dry_run=False, log_dir=None, set_ctx=
             results.append((task, TaskResult(False, "No se ejecutó (proceso cancelado).")))
             continue
         log_file = Path(log_dir) / f"{task.id}_{stamp}.log" if log_dir else None
-        ctx = TaskContext(events, cancel_event, dry_run=dry_run, log_file=log_file)
+        ctx = TaskContext(events, cancel_event, dry_run=dry_run, log_file=log_file, auto_approve=auto_approve)
         if set_ctx:
             set_ctx(ctx)
         events.put(("begin", i, n, task))

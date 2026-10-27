@@ -1,8 +1,8 @@
-# Girag_WinMaintenanceTool
+# Fynex · Mantenimiento preventivo
 
 Aplicación de escritorio en **Python (Tkinter, sin dependencias externas)** para que el equipo de Soporte de Girag realice **mantenimiento preventivo en equipos con Windows 10 y 11**. Interfaz y colores tomados de [Girag_GLPI_MobileForms](https://github.com/G1r4g/Girag_GLPI_MobileForms) (fondo `#0c1526`, tarjetas `#141f36`, acento naranja `#e8823f`).
 
-> **Estado:** v0.5.1 — prototipo funcional. Lógica y UI probadas en Linux (pruebas unitarias + captura con Xvfb). **Aún NO probado en un Windows real**: ver `HANDOFF.md` antes de usarlo en producción.
+> **Estado:** v0.6.1 — prototipo funcional. Lógica y UI probadas en Linux (pruebas unitarias + captura con Xvfb). **Aún NO probado en un Windows real**: ver `HANDOFF.md` antes de usarlo en producción.
 
 ## Funciones
 
@@ -24,7 +24,7 @@ Aplicación de escritorio en **Python (Tkinter, sin dependencias externas)** par
 | **Disco** | Por cada disco: fabricante, serial, firmware, vida útil restante %, datos escritos/leídos, horas, temperatura, alertas SMART y un **concepto**: FUNCIONAL ≥70 % · MEDIO FUNCIONAL 40–69 % · NO FUNCIONAL 15–39 % · CRÍTICO <15 % (los errores SMART suben el estado). NVMe se lee con el log de salud 02h; SATA con SMART ATA vía WMI; si no hay SMART se usan los contadores de Windows. |
 | **Batería** | Fabricante, serial, salud % (capacidad actual / diseño), Wh de diseño y actuales, ciclos, carga y **concepto**: FUNCIONAL ≥80 % · MEDIO 60–79 % · NO FUNCIONAL 40–59 % · CRÍTICO <40 %; los ciclos (≥400 / ≥700 / ≥1000) pueden subir el estado. Si el equipo no tiene batería lo indica. |
 
-**Ejecutar varias tareas:** marca las casillas y pulsa **▶ Ejecutar seleccionadas** (arriba de la lista). Se ejecutan una tras otra en el orden de la lista (limpieza → DISM → bloatware → registro → Compact OS → winget → GLPI), con barra por tarea y barra de lote. Una tarea que falla no detiene las demás; **Cancelar todo** detiene el lote. Cada tarea sigue pidiendo confirmación antes de modificar algo.
+**Ejecutar varias tareas:** marca las casillas y pulsa **▶ Ejecutar seleccionadas** (arriba de la lista). Se ejecutan una tras otra en el orden de la lista (limpieza → DISM → bloatware → registro → Compact OS → winget → GLPI), con barra por tarea y barra de lote. Una tarea que falla no detiene las demás; **Cancelar todo** detiene el lote. Al ejecutar **2 o más** tareas se pide **una sola aprobación** para todo el lote y las tareas no vuelven a preguntar (lo detectado y modificado queda en la consola y en el log); con una sola tarea se mantiene su propia confirmación.
 
 Extras: **modo simulación** (no modifica nada), confirmación antes de cualquier cambio, botón **Cancelar**, tiempo transcurrido y log en pantalla + archivo.
 
@@ -43,7 +43,7 @@ Para desarrollar sin elevar: `python main.py --no-elevate`.
 ```bat
 build.bat
 ```
-Crea `dist\GiragMantenimiento.exe` (PyInstaller, pide administrador al abrir).
+Crea `dist\Fynex.exe` (PyInstaller, pide administrador al abrir).
 
 ## Pruebas
 ```bash
@@ -52,11 +52,16 @@ python -m unittest discover -s tests
 (Corren en cualquier sistema; cubren parseo de progreso, planificador de bloatware, ayudantes del registro y el flujo de limpieza.)
 
 ## Personalizar listas (bloatware, GLPI, winget)
-Los archivos de `config\` van **dentro** del .exe y se extraen a una carpeta temporal en cada ejecución, así que editarlos allí no sirve. Para personalizar: copia el archivo (por ejemplo `config\bloatware.json`) a `C:\ProgramData\GiragMaintenance\config\` y edítalo ahí; **tiene prioridad** sobre el incluido.
+Los archivos de `config\` van **dentro** del .exe y se extraen a una carpeta temporal en cada ejecución, así que editarlos allí no sirve. Para personalizar: copia el archivo (por ejemplo `config\bloatware.json`) a `C:\ProgramData\Fynex\config\` y edítalo ahí; **tiene prioridad** sobre el incluido.
+
+## Marca y ventana
+- **Barra de título propia:** en Windows la app quita la barra nativa y dibuja la suya (icono, nombre, minimizar, maximizar y cerrar). Se puede mover arrastrando, doble clic maximiza y respeta la barra de tareas. Si en algún equipo da problemas, ábrela con `Fynex.exe --native-titlebar` (o define la variable `FYNEX_NATIVE_TITLEBAR=1`) para volver a la barra de Windows.
+- **Logo e icono:** están en `assets/` (`fynex_mark_*.png` para la interfaz y `fynex.ico` para el `.exe` y la ventana). Para usar el logo oficial, reemplaza esos archivos conservando los nombres y tamaños; o regenera los actuales con `pip install pillow && python tools/make_assets.py`.
+- **Carpeta de datos:** ahora es `C:\ProgramData\Fynex`. Si existía `C:\ProgramData\GiragMaintenance` de versiones anteriores, se renombra sola y conserva logs, respaldos y listas.
 
 ## Dónde guarda cosas
-- Logs: `C:\ProgramData\GiragMaintenance\logs\`
-- Respaldos del registro: `C:\ProgramData\GiragMaintenance\backups\registro_<fecha>\` (doble clic en un `.reg` para restaurar).
+- Logs: `C:\ProgramData\Fynex\logs\`
+- Respaldos del registro: `C:\ProgramData\Fynex\backups\registro_<fecha>\` (doble clic en un `.reg` para restaurar).
 
 ## Estructura
 ```
@@ -64,19 +69,19 @@ main.py                      # arranque + elevación UAC
 config/bloatware.json        # lista editable remove / protect / optional
 config/glpi.json             # URL del servidor GLPI y rutas del agente
 config/winget_approved.json  # lista inicial de IDs de winget aprobados
-girag_maint/
+fynex/
   core/   system.py context.py process.py   # admin, rutas, cola de eventos, ejecución de comandos
   tasks/  cleanup.py dism_repair.py bloatware.py registry_repair.py compact_os.py winget_upgrade.py glpi_sync.py
   core/   ... runner.py (ejecución en lote)
   diag/   sysinfo.py disk.py battery.py common.py   # botones Equipo / Disco / Batería (solo lectura)
-  ui/     theme.py app.py                    # paleta Girag + ventana Tkinter
+  ui/     theme.py app.py                    # paleta + ventana Tkinter + widgets redondeados + barra de título propia
 tests/test_core.py
 HANDOFF.md                   # estado, decisiones y pendientes (leer primero si continúas el trabajo)
 ```
 Para añadir una tarea: crear clase que herede de `tasks/base.py::Task`, implementar `run(ctx)` y registrarla en `tasks/__init__.py`. La UI genera la tarjeta sola.
 
 ## Subir a GitHub
-> Importante: sube **todo el contenido** del proyecto, incluidas las carpetas `girag_maint/`, `config/` y `tests/` (en la web de GitHub, arrastrar archivos sueltos no sube carpetas). Lo más fiable es usar git:
+> Importante: sube **todo el contenido** del proyecto, incluidas las carpetas `fynex/`, `config/` y `tests/` (en la web de GitHub, arrastrar archivos sueltos no sube carpetas). Lo más fiable es usar git:
 
 ```bash
 git remote add origin https://github.com/juanstm200/Fynex.git

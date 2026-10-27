@@ -272,7 +272,7 @@ class RegistryRepairTask(Task):
         ctx.status("Creando punto de restauración…")
         ctx.progress(None)
         try:
-            rc, msg = run_powershell("Checkpoint-Computer -Description 'Girag Mantenimiento' "
+            rc, msg = run_powershell("Checkpoint-Computer -Description 'Fynex Mantenimiento' "
                                      "-RestorePointType MODIFY_SETTINGS -ErrorAction Stop", timeout=180)
             ctx.log("Punto de restauración creado." if rc == 0 else
                     f"No se pudo crear punto de restauración (continúa con respaldo .reg): {msg[:160]}",

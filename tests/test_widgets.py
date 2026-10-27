@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from girag_maint.ui.widgets import _hex, _png, corner_pixels
+from fynex.ui.widgets import _hex, _png, corner_pixels
 
 
 class CornerTests(unittest.TestCase):

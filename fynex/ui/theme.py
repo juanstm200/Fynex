@@ -11,5 +11,7 @@ ACCENT_HOVER = "#f09557"
 ACCENT_INK = "#101826"
 OK = "#4caf7d"
 ERR = "#e2685f"
+TITLE_BG = "#080f1d"          # barra de título propia (un tono más oscuro que el fondo)
+TAGLINE = "#5b8bc0"           # lema bajo el logo
 
 FONT = "Segoe UI"

@@ -4,7 +4,7 @@ Método principal («service»): le ordena al servicio del agente instalado que 
 (equivale al enlace «Forzar un inventario» de su página local http://127.0.0.1:62354) y sigue su estado
 (running → waiting) y su log hasta que termina. Si el servicio no responde, o el agente está configurado
 con otro servidor, usa el método de respaldo («cli»): glpi-agent.bat --force --tasks=inventory
---server=<URL de Girag> en primer plano, mostrando su salida."""
+--server=<URL de GLPI> en primer plano, mostrando su salida."""
 import json
 import os
 import re
@@ -107,7 +107,7 @@ def same_server(a: str, b: str) -> bool:
 def check_server(url: str, timeout: int = 12):
     """(alcanzable, detalle). Cualquier respuesta HTTP, incluso 4xx, indica que el servidor responde."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Girag-Maintenance/0.5"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Fynex-Maintenance/0.6"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return True, f"HTTP {r.status}"
     except urllib.error.HTTPError as e:
@@ -120,7 +120,7 @@ def http_local(url: str, method: str = "GET", timeout: float = 8.0):
     """Petición al agente local (sin proxy). Devuelve (código|None, cuerpo|error)."""
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     req = urllib.request.Request(url, method=method, data=b"" if method == "POST" else None,
-                                 headers={"User-Agent": "Girag-Maintenance/0.5"})
+                                 headers={"User-Agent": "Fynex-Maintenance/0.6"})
     try:
         with opener.open(req, timeout=timeout) as r:
             return r.status, r.read(4096).decode("utf-8", "replace")
@@ -309,7 +309,7 @@ class GlpiSyncTask(Task):
         if method in ("auto", "cli") and agent:
             plan.append("cli")
         if mismatch and method == "auto":
-            ctx.log("El agente envía a otro servidor: se usará la línea de comandos con la URL de Girag.", "warn")
+            ctx.log("El agente envía a otro servidor: se usará la línea de comandos con la URL de GLPI.", "warn")
         if not plan:
             return TaskResult(False, "No hay un método disponible para forzar el inventario "
                                      "(revisa «method» en config/glpi.json y el servicio del agente).")
